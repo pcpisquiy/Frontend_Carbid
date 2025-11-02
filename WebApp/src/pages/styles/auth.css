@@ -1,0 +1,98 @@
+/* Tarjeta centrada */
+.auth{
+  display: grid;
+  place-items: start center;
+  padding-block: clamp(1rem, 6vw, 3rem);
+}
+.auth-card{
+  width: min(100%, 34rem);
+  background: var(--surface);
+  border: 0.0625rem solid var(--outline);
+  border-radius: 0.875rem;
+  box-shadow: 0 0.125rem 0.5rem rgba(0,0,0,.06);
+  padding: clamp(1rem, 4vw, 2rem);
+}
+.auth-header h1{ margin: 0 0 .25rem 0; font-weight: 800 }
+.auth-header .accent{ color: var(--primary) }
+.muted{ color: #8a90a0; }
+
+
+
+/* Tabs */
+.tabs{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  margin-top: clamp(0.75rem, 2.5vw, 1rem);
+  background: var(--bg);
+  border: 0.0625rem solid var(--outline);
+  border-radius: 0.75rem;
+  padding: 0.25rem;
+}
+.tab{
+  appearance: none; -webkit-appearance: none;
+  background: transparent; border: 0;
+  padding: clamp(0.5rem, 2vw, 0.75rem);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  color: inherit;
+}
+.tab.active{
+  background: var(--surface);
+  border: 0.0625rem solid var(--outline);
+}
+
+
+/* Cuerpo */
+.auth-body{ margin-top: clamp(0.75rem, 2.5vw, 1.25rem) }
+
+
+
+/* Utilidades */
+.stack-3 > * + *{ margin-top: clamp(0.5rem, 2vw, 0.75rem) }
+.cluster{ display: flex; align-items: center; gap: .5rem; }
+.cluster.between{ justify-content: space-between }
+
+
+
+/* Campos de formulario */
+.form{ width: 100% }
+.field label{ display:block; font-weight:600; margin-bottom: 0.25rem }
+.input-wrap{
+  display: grid;
+  grid-template-columns: auto 1fr auto; /* icono | input | (opcional) botón */
+  align-items: center;
+  gap: .5rem;
+  border: 0.0625rem solid var(--outline);
+  border-radius: 0.625rem;
+  background: var(--bg);
+  padding: clamp(0.4rem, 1.2vw, 0.6rem);
+}
+.input-wrap i.fa{ opacity: .8; padding-left: .25rem }
+.input-wrap input{
+  background: transparent;
+  border: 0; outline: 0; color: inherit;
+  width: 100%;
+  padding: clamp(0.35rem, 1.2vw, 0.5rem) 0;
+}
+
+
+
+/* Botones */
+.btn.wide{ width: 100% }
+.icon-btn.ghost{
+  background: transparent;
+  border-color: transparent;
+}
+
+
+
+/* Checkbox simple */
+.check{ display: inline-flex; align-items: center; gap: .5rem }
+
+
+
+/* Responsivo extra pequeño */
+@media (max-width: 30rem){
+    .tabs{ grid-template-columns: 1fr; }
+}
