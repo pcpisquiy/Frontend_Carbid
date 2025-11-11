@@ -29,7 +29,7 @@ export default function Filters({ value, onChange, onApply, onReset, options }) 
               <i className="fa fa-car" aria-hidden="true"></i>
               <select id="f-marca" value={value.marca} onChange={handleChange("marca")}>
                 <option value="">Todas</option>
-                {options.marcas?.map(m => <option key={m} value={m}>{m}</option>)}
+                {options.marcas?.map(m => <option key={m.Id} value={m.Id}>{m.Descripcion}</option>)}
               </select>
             </div>
           </div>
