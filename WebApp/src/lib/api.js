@@ -1,4 +1,7 @@
-const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
+// src/lib/api.js
+const API =
+  (process.env.REACT_APP_API_URL || 'http://localhost:3001').replace(/\/+$/, '');
+
 
 /** Obtiene filtros (marcas y años disponibles) */
 export async function fetchFilters() {

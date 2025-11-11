@@ -10,11 +10,14 @@ import SummaryAside from "../components/detail/SummaryAside";
 import "./styles/detail.css";
 import { io } from "socket.io-client";
 
+
 export default function AuctionDetail(){
     const { id } = useParams();
     const nav = useNavigate();
     const { user, isAuthenticated } = useAuth();
 
+    const [ended, setEnded] = useState(false);
+    const [winner, setWinner] = useState(null);
     const [auction, setAuction] = useState(null);
     const [allBids, setAllBids]   = useState([]);
     const [loading, setLoading]   = useState(true);
@@ -37,7 +40,7 @@ export default function AuctionDetail(){
 
         useEffect(() => {
         if (!id) return;
-        const socket = io(import.meta.env.VITE_API_URL || "http://localhost:3000", {
+        const socket = io(import.meta.env.VITE_API_URL || "http://localhost:3001", {
             transports: ["websocket"],
         });
 

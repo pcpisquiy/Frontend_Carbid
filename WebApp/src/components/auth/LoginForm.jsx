@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function LoginForm(){
     const [email, setEmail] = useState('');
-    const [pass, setPass] = useState('');
+    const [password, setPass] = useState('');
     const [show, setShow] = useState(false);
 
     const { login } = useAuth();
@@ -16,7 +16,7 @@ export default function LoginForm(){
         e.preventDefault();
         // Demo: “validación” mínima: email no vacío.
         if(!email.trim()){ alert("Ingresa tu correo"); return; }
-        login({ email });// Simula inicio de sesión
+        login({ email,password});// Simula inicio de sesión
         nav(from, { replace: true }); // Redirige (por ahora a Home)
     }
 
@@ -43,7 +43,7 @@ export default function LoginForm(){
                         type={show ? "text" : "password"} 
                         required
                         placeholder= "••••••••"
-                        value={pass} onChange={e => setPass(e.target.value)}
+                        value={password} onChange={e => setPass(e.target.value)}
                     />
                     <button type="button" className="icon-btn ghost" 
                         onClick={() => setShow(s=>!s)}
