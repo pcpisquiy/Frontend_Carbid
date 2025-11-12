@@ -1,0 +1,25 @@
+// PATCH SNIPPET for Publish.jsx (submit handler)
+const API_BASE = (process.env.REACT_APP_API_URL || '').replace(/\/+$/,''); 
+const tokenJWT = localStorage.getItem("token");
+
+const fd = new FormData();
+fd.append('Titulo', title.trim());                 // tbl_Publicacion.Titulo
+fd.append('Id_Modelo', String(modelId || ''));     // tbl_Publicacion.Id_Modelo (INT)
+fd.append('Kilometraje', String(km || 0));         // tbl_Publicacion.Kilometraje (INT)
+fd.append('Id_Transmision', String(trans));        // tbl_Publicacion.Id_Transmision (INT)
+fd.append('Precio_Inicial', String(base || ''));   // tbl_Publicacion.Precio_Inicial (DECIMAL)
+fd.append('Fecha_Inicio', new Date(startAt).toISOString());
+fd.append('Fecha_Fin', new Date(endAt).toISOString());
+// Opcionales (si manejas estado/usuario en backend, puedes omitirlos):
+// fd.append('Id_Estado', '1');
+// fd.append('Usuario_Grabacion', '1');
+
+files.forEach((f) => {
+  if (f instanceof File || f instanceof Blob) fd.append('images', f);
+});
+
+const res = await fetch(`${API_BASE}/api/auctions`, {
+  method: 'POST',
+  headers: { ...(tokenJWT ? { Authorization: `Bearer ${tokenJWT}` } : {}) },
+  body: fd,
+});
