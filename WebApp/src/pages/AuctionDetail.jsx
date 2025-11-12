@@ -1,207 +1,179 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { getAuctions, getBids, estado, highestForAuction, timeLeftLabel, fmtGTQ, bidsForAuction } from "../lib/auctions";
-import { useAuth } from "../context/AuthContext";
+/* Patched AuctionDetail.jsx - removes local bid insertion and supports Usuario field */
+
+import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import "./styles/detail.css";
 import Gallery from "../components/detail/Gallery";
 import Specs from "../components/detail/Specs";
 import BidList from "../components/detail/BidList";
 import BidForm from "../components/detail/BidForm";
 import SummaryAside from "../components/detail/SummaryAside";
-import "./styles/detail.css";
+import { estado, highestForAuction, timeLeftLabel } from "../lib/auctions";
+import { useAuth } from "../context/AuthContext";
 import { io } from "socket.io-client";
 
+const API = (process.env.REACT_APP_API_URL || "").replace(/\/+$/, "");
 
-export default function AuctionDetail(){
-    const { id } = useParams();
-    const nav = useNavigate();
-    const { user, isAuthenticated } = useAuth();
+function mapDetail(d) {
+  return {
+    id: d.id,
+    titulo: d.titulo,
+    marca: d.marca,
+    modelo: d.modelo,
+    anio: d.anio,
+    transmision: d.transmision,
+    km: d.km || 0,
+    startAt: d.startAt,
+    endAt: d.endAt,
+    base: Number(d.priceBase ?? 0) || 0,
+    priceTop: Number(d.priceTop ?? d.priceBase ?? 0) || 0,
+    images: (d.images || []).map((u) =>
+      u && u.startsWith("/uploads/") ? `${API}${u}` : u
+    ),
+    desc: d.desc || "",
+  };
+}
 
-    const [ended, setEnded] = useState(false);
-    const [winner, setWinner] = useState(null);
-    const [auction, setAuction] = useState(null);
-    const [allBids, setAllBids]   = useState([]);
-    const [loading, setLoading]   = useState(true);
+function mapBid(b, fallbackAuctionId) {
+  return {
+    id: b.id,
+    auctionId: b.auction_id ?? b.auctionId ?? fallbackAuctionId,
+    monto: Number(b.amount ?? b.monto ?? 0) || 0,
+    ts: b.created_at ?? b.ts ?? Date.now(),
+    userId: b.user_id ?? b.userId ?? null,
+    usuario: b.Usuario ?? b.usuario ?? b.user ?? "Usuario",
+  };
+}
 
-    useEffect(() => {
-        let ok = true;
-        // Se inicializa con el dataset dummy
-        Promise.all([getAuctions(), getBids()]).then(([A, B]) => {
-        if(!ok) return;
-        const a = A.find(x => String(x.id) === String(id));
-        setAuction(a || null);
-        setAllBids(B);
-        setLoading(false);
-        });
-        return () => { ok = false; };
-    }, [id]);
+export default function AuctionDetail() {
+  const { id } = useParams();
+  const nav = useNavigate();
+  const { authFetch, user } = useAuth();
 
-    // 🔌 WebSocket para pujas en tiempo real
-        
+  const [auction, setAuction] = useState(null);
+  const [bids, setBids] = useState([]);
+  const [status, setStatus] = useState("loading");
+  const [err, setErr] = useState("");
 
-        useEffect(() => {
-        if (!id) return;
-        const socket = io(import.meta.env.VITE_API_URL || "http://localhost:3001", {
-            transports: ["websocket"],
-        });
+  const auctionId = Number(id);
 
-        // Unirse a la sala de esta subasta
-        socket.emit("auction:join", { auctionId: id });
+  useEffect(() => {
+    if (!auctionId) return;
+    setStatus("loading");
+    setErr("");
 
-        // Al iniciar, el backend manda el detalle y las pujas existentes
-        socket.on("auction:init", ({ detail, bids }) => {
-            setAuction(detail);
-            setLocalBids(bids.map(b => ({
-            id: b.id,
-            auctionId: b.auction_id,
-            userId: b.user_id,
-            monto: b.amount,
-            ts: b.created_at
-            })));
-        });
+    let active = true;
 
-        // Cada vez que hay una nueva puja
-        socket.on("bid:new", (bid) => {
-            setLocalBids(prev => [
-            {
-                id: bid.id,
-                auctionId: bid.auction_id,
-                userId: bid.user_id,
-                monto: bid.amount,
-                ts: bid.created_at
-            },
-            ...prev,
-            ]);
-            setAuction(prev =>
-            prev
-                ? { ...prev, priceTop: Math.max(prev.priceTop || 0, bid.amount) }
-                : prev
-            );
-        });
+    authFetch(`${API}/api/bids/auctions/${auctionId}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((detail) => {
+        if (!active || !detail) return;
+        setAuction(mapDetail(detail));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setStatus("ready");
+      });
 
-        // Cuando termina la subasta
-        socket.on("auction:ended", ({ auctionId, winner }) => {
-            alert(`🟢 Subasta #${auctionId} finalizada. Ganador: usuario ${winner.user_id}, Q${winner.amount}`);
-            setEnded(true);
-        });
+    const socket = io(API, { transports: ["websocket"] });
+    socket.emit("auction:join", { auctionId });
 
-        return () => {
-            socket.disconnect();
-        };
-        }, [id]);
+    socket.on("auction:init", ({ detail, bids: bs }) => {
+      if (!active) return;
+      if (detail) setAuction(mapDetail(detail));
+      if (Array.isArray(bs)) {
+        setBids(bs.map((b) => mapBid(b, auctionId)));
+      }
+    });
 
+    socket.on("bid:new", (b) => {
+      if (!active) return;
+      setBids((prev) => [...prev, mapBid(b, auctionId)]);
+    });
 
+    socket.on("auction:ended", ({ auctionId: ended }) => {
+      if (!active) return;
+      if (ended === auctionId) {
+        setAuction((a) => (a ? { ...a, estado: "finalizada" } : a));
+      }
+    });
 
-     // Pujas de ESTA subasta en estado local (para “agregar” sin backend)
-    const [localBids, setLocalBids] = useState([]);
-    useEffect(() => {
-        if (!loading && auction) {
-        const base = bidsForAuction(allBids, auction.id, { desc: true });
-        setLocalBids(base);
-        }
-    }, [loading, auction, allBids]);
-
-    const es = useMemo(() => auction ? estado(auction) : null, [auction]);
-    const top = useMemo(() => auction ? highestForAuction(auction, localBids) : 0, [auction, localBids]);
-    const time = useMemo(() => auction ? timeLeftLabel(auction) : "", [auction])
-    
-
-    // Handler para poner bid 
-    const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
-
-    const onPlaceBid = async (monto) => {
-    if (!auction || !isAuthenticated) return;
-    try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API}/api/auctions/${auction.id}/bids`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ amount: monto }),
-        });
-        if (!res.ok) {
-        const err = await res.json();
-        alert(err.error || "No se pudo registrar la puja");
-        }
-        // No necesitas actualizar manualmente, el socket emitirá 'bid:new'
-    } catch (e) {
-        console.error(e);
-        alert("Error al enviar la puja.");
-    }
+    return () => {
+      active = false;
+      socket.close();
     };
+  }, [auctionId, authFetch]);
 
+  const es = auction ? estado(auction) : "programada";
+  const top = auction ? highestForAuction(auction, bids) : 0;
+  const time = auction ? timeLeftLabel(auction) : "";
 
+  const onPlaceBid = async (amount) => {
+    if (!auctionId) return;
+    try {
+      const res = await authFetch(`${API}/api/bids/auctions/${auctionId}/bids`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || "No se pudo registrar la puja");
+      }
+      const bid = await res.json();
 
-    if (loading) {
-        return (
-        <main className="container">
-            <p className="muted">Cargando subasta…</p>
-        </main>
-        );
+      // ❌ Antes se insertaba local
+      // setBids((prev) => [...prev, mapBid(bid, auctionId)]);
+      // ✔️ Ahora solo se espera "bid:new" desde el servidor
+    } catch (e) {
+      alert(e.message || "Error al ofertar");
     }
+  };
 
-    if (!auction) {
-        return (
-        <main className="container">
-            <h1>Subasta no encontrada</h1>
-            <p className="muted">La subasta #{id} no existe o fue removida.</p>
-            <button className="btn" onClick={() => nav(-1)}>Volver</button>
-        </main>
-        );
-    }
-    
-    return (
-        <main className="detail">
-        <div className="detail-grid">
-            {/* IZQUIERDA */}
-            <section className="surface stack-4">
-            <nav aria-label="breadcrumb" className="muted mini">
-                <Link to="/">Inicio</Link> / <span>{auction.marca}</span> / <strong>{auction.modelo}</strong>
-            </nav>
+  if (!auctionId) return <p>Subasta inválida.</p>;
+  if (status === "loading" && !auction) return <p>Cargando subasta...</p>;
+  if (err) return <p style={{ color: "tomato" }}>❌ {err}</p>;
+  if (!auction) return <p>Subasta no encontrada.</p>;
 
-            <header className="stack-3">
-                <h1 className="title">{auction.titulo}</h1>
-                <div className="cluster wrap">
-                <span className={`badge status ${es}`}>{es === "activa" ? "Activa" : es === "programada" ? "Próxima" : "Finalizada"}</span>
-                <span className="chip soft">
-                    <i className="fa fa-clock-o" aria-hidden="true"></i> {time}
-                </span>
-                <span className="chip soft">
-                    Base: <strong>{fmtGTQ.format(auction.base)}</strong>
-                </span>
-                <span className="chip soft">
-                    Puja actual: <strong>{fmtGTQ.format(top)}</strong>
-                </span>
-                </div>
-            </header>
+  return (
+    <main className="detail">
+      <div className="detail-grid">
+        <section className="surface stack-4">
+          <div className="stack-2">
+            <button className="link" type="button" onClick={() => nav("/")}>
+              ← Volver al inicio
+            </button>
+            <h1 className="title">{auction.titulo}</h1>
+            <div className="cluster wrap">
+              <span className="badge">{auction.marca}</span>
+              <span className="badge">
+                {auction.modelo} · {auction.anio}
+              </span>
+              <span className="badge small">{auction.transmision}</span>
+            </div>
+          </div>
 
-            <Gallery images={auction.images} />
+          <Gallery images={auction.images} />
+          <Specs a={auction} />
 
-            <Specs a={auction} />
+          <section className="stack-3">
+            <h2>Pujas</h2>
+            <BidList bids={bids} />
+          </section>
 
-            <section className="stack-3">
-                <h2>Pujas</h2>
-                <BidList bids={localBids} />
-            </section>
+          <BidForm
+            status={es}
+            current={top}
+            minStep={50}
+            isAuthenticated={!!user}
+            onPlaceBid={onPlaceBid}
+          />
+        </section>
 
-            <section className="stack-3">
-                <h2>Ofertar</h2>
-                <BidForm
-                status={es}
-                current={top}
-                minStep={50}
-                isAuthenticated={isAuthenticated}
-                onPlaceBid={onPlaceBid}
-                />
-            </section>
-            </section>
-
-            {/* DERECHA (sticky) */}
-            <aside className="surface aside-sticky">
-            <SummaryAside a={auction} top={top} status={es} time={time} />
-            </aside>
-        </div>
-        </main>
-    );
+        <aside className="surface aside-sticky">
+          <SummaryAside a={auction} top={top} status={es} time={time} />
+        </aside>
+      </div>
+    </main>
+  );
 }

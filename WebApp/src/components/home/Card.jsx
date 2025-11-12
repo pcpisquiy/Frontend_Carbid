@@ -1,11 +1,14 @@
 import { estado, highestForAuction, timeLeftLabel, fmtGTQ } from "../../lib/auctions";
 
 
+const API = (process.env.REACT_APP_API_URL || '').replace(/\/+$/,'');
+
 export default function Card({ a, allBids = [], onOpen, isFollowing, onFollow }) {
     const es   = estado(a);
     const top  = highestForAuction(a, allBids);
     const time = timeLeftLabel(a);
-    const src = a.images?.[0] && a.images[0].trim() ? a.images[0] : "/images/placeholder.jpg";
+    const raw = a.images?.[0] && a.images[0].trim() ? a.images[0] : "/images/placeholder.jpg";
+    const src = raw.startsWith('/uploads/') ? (API + raw) : raw;
 
     const label = es === "activa" ? "Activa"
                 : es === "programada" ? "Próxima"

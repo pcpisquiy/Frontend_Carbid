@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState,useEffect } from "react";
 import PhotosUploader from "../components/publish/PhotosUploader";
 import "./styles/publish.css";
-
+import { useAuth } from "../context/AuthContext";
 const currentYear = new Date().getFullYear();
 
 export default function Publish(){
@@ -11,13 +11,47 @@ export default function Publish(){
   const [model, setModel] = useState("");
   const [year, setYear] = useState(currentYear);
   const [km, setKm] = useState("");
-  const [trans, setTrans] = useState("Automática");
+  const [trans, setTrans] = useState('1'); // 1=Automática,2=Manual,3=CVT
   const [base, setBase] = useState("");
   const [startAt, setStartAt] = useState(""); // datetime-local
   const [endAt, setEndAt] = useState("");
   const [desc, setDesc] = useState("");
   const [files, setFiles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+// IDs y catálogos
+const [brandId, setBrandId] = useState('');
+const [modelId, setModelId] = useState('');
+const [brands, setBrands] = useState([]);
+const [models, setModels] = useState([]);
+const { authFetch } = useAuth();
+// Cargar marcas al montar
+useEffect(() => {
+  (async () => {
+    const r = await authFetch(`${process.env.REACT_APP_API_URL.replace(/\/+$/,'')}/api/brands`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data?.error || 'No se pudieron cargar las marcas');
+    setBrands(Array.isArray(data) ? data : []);
+  })().catch(console.error);
+}, [authFetch]);
+
+// Cuando cambia la marca, cargar modelos y limpiar el modelo seleccionado
+useEffect(() => {
+  setModels([]);
+  setModelId('');
+  setModel(''); // si sigues guardando el nombre del modelo en "model"
+  if (!brandId) { setBrand(''); return; }
+
+  // Actualiza también el texto visible de "brand" si lo sigues usando
+  const b = brands.find(x => String(x.Id) === String(brandId));
+  setBrand(b?.Descripcion || '');
+
+  (async () => {
+    const r = await authFetch(`${process.env.REACT_APP_API_URL.replace(/\/+$/,'')}/api/brands/${brandId}/models`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data?.error || 'No se pudieron cargar los modelos');
+    setModels(Array.isArray(data) ? data : []);
+  })().catch(console.error);
+}, [brandId, brands, authFetch, setBrand, setModel]);
 
   // Validaciones simples
   const errors = useMemo(()=>{
@@ -26,8 +60,8 @@ export default function Publish(){
     const k = Number(km);
     const b = Number(base);
     if (!title.trim()) e.title = "Título requerido";
-    if (!brand.trim()) e.brand = "Marca requerida";
-    if (!model.trim()) e.model = "Modelo requerido";
+    if (!brandId.trim()) e.brand = "Marca requerida";
+    if (!modelId.trim()) e.model = "Modelo requerido";
     if (!y || y < 1980 || y > currentYear + 1) e.year = "Año inválido";
     if (k < 0) e.km = "Kilometraje inválido";
     if (!b || b < 100) e.base = "Precio base mínimo 100";
@@ -35,34 +69,33 @@ export default function Publish(){
     if (!endAt) e.endAt = "Fecha de cierre requerida";
     if (startAt && endAt && new Date(startAt) >= new Date(endAt)) e.endAt = "El cierre debe ser después del inicio";
     return e;
-  }, [title, brand, model, year, km, base, startAt, endAt]);
+  }, [title, brandId, modelId, year, km, base, startAt, endAt]);
 
   const isValid = Object.keys(errors).length === 0;
 
 const onSubmit = async (e) => {
   e.preventDefault();
-  if (!isValid) {
-    alert("Revisa los campos resaltados.");
-    return;
-  }
+  // if (!isValid) {
+  //   alert("Revisa los campos resaltados.");
+  //   return;
+  // }
 
   try {
     setIsSubmitting(true);
-
     // Si usas Vite, puedes configurar VITE_API_URL=http://localhost:3000 en .env
-    const API_BASE = import.meta?.env?.VITE_API_URL || "";
+    const API_BASE = (process.env.REACT_APP_API_URL || '').replace(/\/+$/,'');
     const tokenJWT = localStorage.getItem("token"); // ajusta si lo guardas con otra clave
 
     const fd = new FormData();
-    fd.append("title", title.trim());
-    fd.append("brand", brand.trim());
-    fd.append("model", model.trim());
+    fd.append("Titulo", title.trim());
+    fd.append("Id_Modelo", modelId.trim());
+    fd.append("Kilometraje", Number(km || 0));
+    fd.append('Id_Transmision', trans); // "Automática" | "Manual" | "CVT"
+    fd.append("Precio_Inicial", Number(base));
+    fd.append("Fecha_Inicio", new Date(startAt).toISOString()); // del input datetime-local
+    fd.append("Fecha_Fin", new Date(endAt).toISOString());
+    fd.append("brand", brandId.trim());
     fd.append("year", Number(year));
-    fd.append("km", Number(km || 0));
-    fd.append("transmission", trans); // "Automática" | "Manual" | "CVT"
-    fd.append("base_price", Number(base));
-    fd.append("start_at", new Date(startAt).toISOString()); // del input datetime-local
-    fd.append("end_at", new Date(endAt).toISOString());
     fd.append("description", desc.trim());
 
     // Adjunta solo File/Blob reales; ignora strings (urls previas)
@@ -151,40 +184,64 @@ const onSubmit = async (e) => {
             </div>
 
             {/* Marca/Modelo/Año */}
-            <div className="cluster start" style={{gap: 'clamp(0.5rem, 2vw, 1rem)'}}>
-              <div className="field" style={{flex:1}}>
-                <label htmlFor="brand">Marca</label>
-                <div className="input-wrap">
-                  <i className="fa fa-car" aria-hidden="true"></i>
-                  <input id="brand" type="text" required placeholder="Toyota"
-                         value={brand} onChange={e=>setBrand(e.target.value)}
-                         aria-invalid={!!errors.brand} />
-                </div>
-                {errors.brand && <small role="alert" className="muted">{errors.brand}</small>}
-              </div>
+           {/* Marca/Modelo/Año */}
+<div className="cluster start" style={{gap: 'clamp(0.5rem, 2vw, 1rem)'}}>
 
-              <div className="field" style={{flex:1}}>
-                <label htmlFor="model">Modelo</label>
-                <div className="input-wrap">
-                  <i className="fa fa-tag" aria-hidden="true"></i>
-                  <input id="model" type="text" required placeholder="Corolla"
-                         value={model} onChange={e=>setModel(e.target.value)}
-                         aria-invalid={!!errors.model} />
-                </div>
-                {errors.model && <small role="alert" className="muted">{errors.model}</small>}
-              </div>
+  {/* Marca (select) */}
+  <div className="field" style={{flex:1}}>
+    <label htmlFor="brand">Marca</label>
+    <div className="input-wrap">
+      <i className="fa fa-car" aria-hidden="true"></i>
+      <select
+        id="brand"
+        required
+        className="input"          // mantiene tu look de input
+        value={brandId}
+        onChange={e => setBrandId(e.target.value)}
+        aria-invalid={!!errors.brand}
+      >
+        <option value="">Seleccione marca</option>
+        {brands.map(b => (
+          <option key={b.Id} value={b.Id}>{b.Descripcion}</option>
+        ))}
+      </select>
+    </div>
+    {errors.brand && <small role="alert" className="muted">{errors.brand}</small>}
+  </div>
 
-              <div className="field" style={{maxWidth:'10rem'}}>
-                <label htmlFor="year">Año</label>
-                <div className="input-wrap">
-                  <i className="fa fa-calendar" aria-hidden="true"></i>
-                  <input id="year" type="number" required min={1980} max={currentYear+1}
-                         value={year} onChange={e=>setYear(e.target.value)}
-                         aria-invalid={!!errors.year} />
-                </div>
-                {errors.year && <small role="alert" className="muted">{errors.year}</small>}
-              </div>
-            </div>
+  {/* Modelo (select dependiente) */}
+  <div className="field" style={{flex:1}}>
+    <label htmlFor="model">Modelo</label>
+    <div className="input-wrap">
+      <i className="fa fa-tag" aria-hidden="true"></i>
+      <select
+        id="model"
+        required
+        className="input"          // mantiene tu look de input
+        value={modelId}
+        onChange={e => {
+          setModelId(e.target.value);
+          const m = models.find(x => String(x.Id) === e.target.value);
+          setModel(m?.Descripcion || ''); // si sigues usando "model" (texto)
+        }}
+        aria-invalid={!!errors.model}
+        disabled={!brandId}
+      >
+        <option value="">
+          {!brandId ? 'Primero seleccione marca' : 'Seleccione modelo'}
+        </option>
+        {models.map(m => (
+          <option key={m.Id} value={String(m.Id)}>
+            {m.Descripcion}{m.Anio ? ` (${m.Anio})` : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+    {errors.model && <small role="alert" className="muted">{errors.model}</small>}
+  </div>
+
+</div>
+
 
             {/* Kilometraje / Transmisión */}
             <div className="cluster" style={{gap: 'clamp(0.5rem, 2vw, 1rem)'}}>
@@ -204,8 +261,9 @@ const onSubmit = async (e) => {
                 <div className="input-wrap">
                   <i className="fa fa-cogs" aria-hidden="true"></i>
                   <select id="trans" value={trans} onChange={e=>setTrans(e.target.value)}>
-                    <option>Automática</option>
-                    <option>Manual</option>
+                    <option value="1">Automática</option>
+                    <option value="2">Manual</option>
+                    <option value="3">CVT</option>
                     <option>CVT</option>
                   </select>
                 </div>
@@ -268,7 +326,7 @@ const onSubmit = async (e) => {
             {/* Botón enviar */}
             <div className="cluster between">
               <span className="muted">Revisa antes de publicar</span>
-              <button className="btn primary" type="submit" disabled={!isValid}>
+              <button className="btn primary" type="submit">
                 Publicar
               </button>
             </div>

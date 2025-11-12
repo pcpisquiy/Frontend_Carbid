@@ -25,9 +25,10 @@ export function bidsForAuction(allBids, auctionId, { desc = true } = {}){
 
 /* Puja más alta de una subasta */
 export function highestForAuction(a, allBids){
+  const base = Number(a.base ?? a.priceTop ?? a.priceBase ?? 0) || 0;
   const bs = bidsForAuction(allBids, a.id);
-  if (!bs.length) return a.base;
-  let max = a.base;
+  if (!bs.length) return base;
+  let max = base;
   for (const b of bs) if (b.monto > max) max = b.monto;
   return max;
 }

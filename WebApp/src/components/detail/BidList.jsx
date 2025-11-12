@@ -13,7 +13,7 @@ export default function BidList({ bids = [] }){
             <div key={b.id} className="biditem">
             <span className="who">@{b.userId}</span>
             <span className="when muted mini">{when(b.ts)}</span>
-            <span className="amt">{fmtGTQ.format(b.monto)}</span>
+            <span className="amt">{fmtGTQ.format(Number(b.monto)||0)}</span>
             </div>
         ))}
         </div>

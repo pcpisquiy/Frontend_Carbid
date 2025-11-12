@@ -6,6 +6,8 @@ import CardsGrid from "../components/home/CardsGrid";
 import Pagination from "../components/home/Pagination";
 import { fetchFilters, fetchAuctions, fetchBids } from "../lib/api"; 
 
+const API = (process.env.REACT_APP_API_URL || "").replace(/\/+$/, "");
+
 export default function Home() {
   const nav = useNavigate();
 

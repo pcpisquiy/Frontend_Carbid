@@ -1,13 +1,19 @@
 import { useState } from "react";
 
 const ph = "/images/placeholder.jpg";
+const API = (process.env.REACT_APP_API_URL || '').replace(/\/+$/,'');
 
 export default function Gallery({ images = [] }){
     const norm = images.length ? images : [ph];
     const [idx, setIdx] = useState(0);
     const main = norm[idx] || ph;
 
-    const fix = (src) => src.startsWith("/img/") ? src.replace("/img/","/images/") : src;
+    const fix = (src) => {
+        if (!src) return ph;
+        if (src.startsWith("/img/")) return src.replace("/img/","/images/");
+        if (src.startsWith("/uploads/")) return API + src;
+        return src;
+    };
 
     return (
         <section className="gallery">

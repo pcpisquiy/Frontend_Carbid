@@ -40,7 +40,7 @@ export default function BidForm({ status, current, minStep = 50, isAuthenticated
                 disabled={disabled}
             />
             </div>
-            <button className="btn primary" type="submit" disabled={disabled}>
+            <button className="btn primary" type="submit" >
             Ofertar
             </button>
         </div>
